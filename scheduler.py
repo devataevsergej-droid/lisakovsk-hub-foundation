@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config import Settings
 from bots.job_bot.db import SupabaseRepository
-from bots.job_bot.keyboards.common.channel import weekly_stats_keyboard
+from bots.keyboards.job_inline import weekly_stats_keyboard
 from services.job_text import weekly_stats_text
 
 logger = logging.getLogger(__name__)

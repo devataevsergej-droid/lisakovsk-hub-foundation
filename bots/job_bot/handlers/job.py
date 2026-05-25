@@ -19,7 +19,7 @@ from constants import (
     PAYMENT_TYPE_MANUAL,
 )
 from ..db import SupabaseRepository
-from ..keyboards.job_inline import *
+from bots.keyboards.job_inline import (
     admin_manual_payment_keyboard,
     buy_unlimited_keyboard,
     channel_post_keyboard,
