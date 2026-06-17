@@ -3,7 +3,7 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 def main_menu(user_role: str = None) -> ReplyKeyboardMarkup:
     keyboard = [
-        [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Ищу работу")],
+        [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Заполнить анкету")],
         [KeyboardButton(text="👥 Пригласить друга"), KeyboardButton(text="🔍 Смотреть вакансии")],
         [KeyboardButton(text="👤 Личный кабинет"), KeyboardButton(text="📺 Наш канал")],
     ]

@@ -1,7 +1,13 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
+
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from constants import (
+from job_lisakovsk_bot.constants import (
     FEATURE_PIN_VACANCY,
     FEATURE_UNLIMITED_VACANCIES,
     FEATURE_URGENT_BROADCAST,
@@ -23,10 +29,10 @@ def main_menu(user_role: str = None) -> ReplyKeyboardMarkup:
     if user_role == "employer":
         role_button = [KeyboardButton(text="📢 Разместить вакансию")]
     elif user_role == "seeker":
-        role_button = [KeyboardButton(text="📝 Ищу работу")]
+        role_button = [KeyboardButton(text="📝 Заполнить анкету" )]
     else:
         # Если роль не определена, показываем обе
-        role_button = [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Ищу работу")]
+        role_button = [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Заполнить анкету")]
     
     keyboard = [role_button] + base_buttons
     

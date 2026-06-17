@@ -17,13 +17,23 @@ def vacancy_public_text(vacancy: dict, bot_username: str) -> str:
     schedule = vacancy["schedule"].lower()
     description = vacancy["description"]
     contacts = vacancy["contacts"]
+
     return (
-        f"🏗 Требуется {title}\n"
-        f"💰 {salary}\n"
-        f"📍 Лисаковск, {schedule}\n"
-        f"📝 {description}\n"
-        f"Контакты: {contacts}\n\n"
-        f"Разместить свою вакансию: @{bot_username}"
+        f"🏢 Работодатель\n\n"
+        f"📍 Лисаковск\n\n"
+        f"💼 Требуется:\n"
+        f"{title}\n\n"
+        f"💰 Зарплата:\n"
+        f"{salary}\n\n"
+        f"🕒 График:\n"
+        f"{schedule.capitalize()}\n\n"
+        f"📋 Обязанности:\n"
+        f"{description}\n\n"
+        f"📞 Контакты:\n"
+        f"{contacts}\n\n"
+        f"#Май2026@LisakovskHub #Работа@LisakovskHub\n\n"
+        f"Разместить свою вакансию:\n"
+        f"@{bot_username}"
     )
 
 

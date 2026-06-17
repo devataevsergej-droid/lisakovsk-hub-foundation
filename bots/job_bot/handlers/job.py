@@ -234,7 +234,7 @@ async def start(message: Message, state: FSMContext, command: CommandObject, rep
     
     if arg and arg.startswith("apply_"):
         vacancy_id = int(arg.split("_")[1])
-        await apply_vacancy_start(message, vacancy_id, repo, settings)
+        await apply_vacancy_start(message, vacancy_id, repo, settings, bot)
         return
     
     if arg == "resume":
@@ -298,7 +298,7 @@ async def apply_vacancy_start(
         await message.answer("❌ Произошла ошибка. Попробуйте позже.")
 
 
-@router.message(F.text == "Ищу работу")
+@router.message(F.text == "📝 Заполнить анкету")
 async def seeker_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(SeekerForm.sphere)
@@ -318,7 +318,15 @@ async def seeker_schedule(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(schedule=callback.data.split(":", 1)[1])
     await state.set_state(SeekerForm.salary)
     await callback.message.edit_text(
-        "💰 Укажите зарплату от и до, например: 200000-300000.\nЕсли не важно — напишите «Не важно»."
+        "💰 Укажите желаемую зарплату в тысячах тенге.\n\n"
+        "Примеры:\n"
+        "200\n"
+        "350\n"
+        "500\n\n"
+        "Или диапазон:\n"
+        "200-300\n"
+        "350-500\n\n"
+        "Если не важно — напишите «Не важно»."
     )
     await callback.answer()
 
@@ -677,11 +685,11 @@ async def manual_payment_start(
         title = "Услуга"
     
     # Получаем текущие данные формы
-        current_form_data = await state.get_data()
+    current_form_data = await state.get_data()
 # Убираем служебный ключ, если он есть, чтобы не засорять БД
-        current_form_data.pop("pending_vacancy_data", None)
+    current_form_data.pop("pending_vacancy_data", None)
 
-        payment = await repo.create_payment(
+    payment = await repo.create_payment(
             user_id=callback.from_user.id,
             payment_type=PAYMENT_TYPE_MANUAL,
             amount=price,
@@ -813,20 +821,27 @@ async def handle_payment_check(message: Message, state: FSMContext, repo: Supaba
         return
     
     # Отправляем чек админу
+    feature_names = {
+    "unlimited_vacancies": "Безлимит вакансий",
+    "vip_seeker": "VIP соискатель",
+    "pin_vacancy": "Закреп вакансии",
+    "urgent_broadcast": "Срочная рассылка",
+}
     caption = (
         f"🧾 *Новый чек на подтверждение*\n\n"
         f"💰 Сумма: {payment['amount']} ₸\n"
-        f"📦 Услуга: {payment['feature']}\n"
+        f"📦 Услуга: {feature_names.get(payment['feature'], payment['feature'])}\n"
         f"👤 Пользователь: {payment['user_id']}\n"
-        f"🆔 Платёж #{payment_id}"
+        f"🆔 ID заявки #{payment_id}"
     )
-    
+
     await bot.send_photo(
-        settings.admin_chat_id,
-        message.photo[-1].file_id,
-        caption=caption,
-        reply_markup=admin_manual_payment_keyboard(payment_id)
-    )
+    settings.admin_chat_id,
+    message.photo[-1].file_id,
+    caption=caption,
+    parse_mode="Markdown",
+    reply_markup=admin_manual_payment_keyboard(payment_id)
+)
     
     await message.answer("✅ Чек отправлен администратору на проверку. Ожидайте подтверждения.")
     await state.update_data(pending_payment_id=None)
@@ -849,7 +864,7 @@ async def manual_payment_confirm(callback: CallbackQuery, repo: SupabaseReposito
 
     # Проверяем, были ли сохранены данные формы
     saved_form_data = payment.get("form_data")
-    if payment["feature"] == "unlimited_vacancies" and saved_form_data:
+    if payment["feature"] == "unlimited_vacancies":
         # Если данные есть, просим пользователя продолжить и отправляем их ему.
         await bot.send_message(
             payment["user_id"],
@@ -865,7 +880,7 @@ async def manual_payment_confirm(callback: CallbackQuery, repo: SupabaseReposito
         # Стандартное сообщение для других услуг или если данных нет
         await bot.send_message(payment["user_id"], f"✅ {result}")
 
-    await callback.message.edit_text(f"✅ Ручная оплата #{payment_id} подтверждена.")
+    await callback.message.answer(f"✅ Ручная оплата #{payment_id} подтверждена.\n{result}")
     await callback.answer()
 
 
@@ -908,7 +923,7 @@ async def our_channel(message: Message, settings: Settings):
         )
     )
 
-@router.message(F.text == "📝 Ищу работу")
+@router.message(F.text == "📝 Заполнить анкету")
 async def find_job_button(message: Message, state: FSMContext):
     await seeker_start(message, state)
 
@@ -929,43 +944,137 @@ async def lk_command(message: Message, repo: SupabaseRepository):
 
 
 @router.message(F.text.in_({"👤 Личный кабинет", "/my_stats"}))
-async def my_stats(message: Message, repo: SupabaseRepository) -> None:
+async def my_stats(
+    message: Message,
+    repo: SupabaseRepository
+) -> None:
+
     try:
-        await message.answer("📊 Загружаем статистику...")
-        
-        user_role = await get_user_role(message.from_user.id, repo)
-        role_display = "Работодатель" if user_role == "employer" else "Соискатель" if user_role == "seeker" else "Не определена"
-        await message.answer(f"👤 Режим: {role_display}")
-        
+
+        user_role = await get_user_role(
+            message.from_user.id,
+            repo
+        )
+
+        role_display = (
+            "Работодатель"
+            if user_role == "employer"
+            else "Соискатель"
+            if user_role == "seeker"
+            else "Не определена"
+        )
+
         if user_role == "employer":
-            stats = await repo.employer_stats(message.from_user.id)
-            text = (
-                f"📊 *Статистика работодателя*\n\n"
-                f"📌 Всего вакансий: {stats.get('vacancies_total', 0)}\n"
-                f"✅ Активные: {stats.get('active_vacancies', 0)}\n"
-                f"⏳ На модерации: {stats.get('pending_vacancies', 0)}\n"
-                f"🔒 Закрытые: {stats.get('closed_vacancies', 0)}\n"
-                f"❌ Отклонённые: {stats.get('rejected_vacancies', 0)}\n\n"
-                f"👁️ Просмотров: {stats.get('views', 0)}\n"
-                f"📩 Откликов: {stats.get('responses', 0)}\n"
-                f"👥 Соискателей в вашей сфере: {stats.get('seekers_in_sphere', 0)}"
-            )
-            await message.answer(text, parse_mode="Markdown")
-        else:
-            seeker = await repo.get_seeker(message.from_user.id)
-            if not seeker:
-                await message.answer(
-                    "📝 У вас нет анкеты соискателя.\n\n"
-                    "Хотите найти работу? Заполните анкету!\n\n"
-                    "👉 Нажмите /resume, чтобы начать"
+
+            try:
+
+                stats = await repo.employer_stats(
+                    message.from_user.id
                 )
+
+            except Exception as e:
+
+                logger.error(
+                    f"Employer stats error: {e}"
+                )
+
+                await message.answer(
+                    "⚠️ Статистика временно недоступна.\n\n"
+                    "Но ваши вакансии продолжают работать 🙂"
+                )
+
                 return
-            stats = await repo.seeker_stats(message.from_user.id)
-            text = f"📊 Статистика соискателя:\n\nПросмотров: {stats.get('views', 0)}\nОткликов: {stats.get('responses', 0)}"
+
+            text = (
+                f"📊 Статистика работодателя\n\n"
+
+                f"👤 Режим: {role_display}\n\n"
+
+                f"📌 Всего вакансий: "
+                f"{stats.get('vacancies_total', 0)}\n"
+
+                f"✅ Активные: "
+                f"{stats.get('active_vacancies', 0)}\n"
+
+                f"⏳ На модерации: "
+                f"{stats.get('pending_vacancies', 0)}\n"
+
+                f"🔒 Закрытые: "
+                f"{stats.get('closed_vacancies', 0)}\n"
+
+                f"❌ Отклонённые: "
+                f"{stats.get('rejected_vacancies', 0)}\n\n"
+
+                f"👁️ Просмотров: "
+                f"{stats.get('views', 0)}\n"
+
+                f"📩 Откликов: "
+                f"{stats.get('responses', 0)}"
+            )
+
             await message.answer(text)
-            
+
+            return
+
+        seeker = await repo.get_seeker(
+            message.from_user.id
+        )
+
+        if not seeker:
+
+            await message.answer(
+                "📝 У вас пока нет анкеты "
+                "соискателя.\n\n"
+
+                "Нажмите кнопку "
+                "«📝 Заполнить анкету» "
+                "в меню ниже 👇"
+            )
+
+            return
+
+        try:
+
+            stats = await repo.seeker_stats(
+                message.from_user.id
+            )
+
+        except Exception as e:
+
+            logger.error(
+                f"Seeker stats error: {e}"
+            )
+
+            await message.answer(
+                "⚠️ Статистика временно недоступна."
+            )
+
+            return
+
+        text = (
+            f"📊 Статистика соискателя\n\n"
+
+            f"👤 Режим: {role_display}\n\n"
+
+            f"👁️ Просмотров: "
+            f"{stats.get('views', 0)}\n"
+
+            f"📩 Откликов: "
+            f"{stats.get('responses', 0)}"
+        )
+
+        await message.answer(text)
+
     except Exception as e:
-        await message.answer(f"❌ Ошибка: {str(e)[:100]}")
+
+        logger.error(
+            f"My stats error: {e}"
+        )
+
+        await message.answer(
+            "❌ Ошибка загрузки кабинета."
+        )
+        
 
 @router.message(Command("admin_stats"))
 async def admin_stats(message: Message, repo: SupabaseRepository, settings: Settings) -> None:

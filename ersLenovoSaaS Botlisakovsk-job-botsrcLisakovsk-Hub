@@ -1,0 +1,365 @@
+[1mdiff --git a/bots/job_bot/handlers/job.py b/bots/job_bot/handlers/job.py[m
+[1mindex 90217be..4f160be 100644[m
+[1m--- a/bots/job_bot/handlers/job.py[m
+[1m+++ b/bots/job_bot/handlers/job.py[m
+[36m@@ -234,7 +234,7 @@[m [masync def start(message: Message, state: FSMContext, command: CommandObject, rep[m
+     [m
+     if arg and arg.startswith("apply_"):[m
+         vacancy_id = int(arg.split("_")[1])[m
+[31m-        await apply_vacancy_start(message, vacancy_id, repo, settings)[m
+[32m+[m[32m        await apply_vacancy_start(message, vacancy_id, repo, settings, bot)[m
+         return[m
+     [m
+     if arg == "resume":[m
+[36m@@ -298,7 +298,7 @@[m [masync def apply_vacancy_start([m
+         await message.answer("❌ Произошла ошибка. Попробуйте позже.")[m
+ [m
+ [m
+[31m-@router.message(F.text == "Ищу работу")[m
+[32m+[m[32m@router.message(F.text == "📝 Заполнить анкету")[m
+ async def seeker_start(message: Message, state: FSMContext) -> None:[m
+     await state.clear()[m
+     await state.set_state(SeekerForm.sphere)[m
+[36m@@ -318,7 +318,15 @@[m [masync def seeker_schedule(callback: CallbackQuery, state: FSMContext) -> None:[m
+     await state.update_data(schedule=callback.data.split(":", 1)[1])[m
+     await state.set_state(SeekerForm.salary)[m
+     await callback.message.edit_text([m
+[31m-        "💰 Укажите зарплату от и до, например: 200000-300000.\nЕсли не важно — напишите «Не важно»."[m
+[32m+[m[32m        "💰 Укажите желаемую зарплату в тысячах тенге.\n\n"[m
+[32m+[m[32m        "Примеры:\n"[m
+[32m+[m[32m        "200\n"[m
+[32m+[m[32m        "350\n"[m
+[32m+[m[32m        "500\n\n"[m
+[32m+[m[32m        "Или диапазон:\n"[m
+[32m+[m[32m        "200-300\n"[m
+[32m+[m[32m        "350-500\n\n"[m
+[32m+[m[32m        "Если не важно — напишите «Не важно»."[m
+     )[m
+     await callback.answer()[m
+ [m
+[36m@@ -677,11 +685,11 @@[m [masync def manual_payment_start([m
+         title = "Услуга"[m
+     [m
+     # Получаем текущие данные формы[m
+[31m-        current_form_data = await state.get_data()[m
+[32m+[m[32m    current_form_data = await state.get_data()[m
+ # Убираем служебный ключ, если он есть, чтобы не засорять БД[m
+[31m-        current_form_data.pop("pending_vacancy_data", None)[m
+[32m+[m[32m    current_form_data.pop("pending_vacancy_data", None)[m
+ [m
+[31m-        payment = await repo.create_payment([m
+[32m+[m[32m    payment = await repo.create_payment([m
+             user_id=callback.from_user.id,[m
+             payment_type=PAYMENT_TYPE_MANUAL,[m
+             amount=price,[m
+[36m@@ -813,20 +821,27 @@[m [masync def handle_payment_check(message: Message, state: FSMContext, repo: Supaba[m
+         return[m
+     [m
+     # Отправляем чек админу[m
+[32m+[m[32m    feature_names = {[m
+[32m+[m[32m    "unlimited_vacancies": "Безлимит вакансий",[m
+[32m+[m[32m    "vip_seeker": "VIP соискатель",[m
+[32m+[m[32m    "pin_vacancy": "Закреп вакансии",[m
+[32m+[m[32m    "urgent_broadcast": "Срочная рассылка",[m
+[32m+[m[32m}[m
+     caption = ([m
+         f"🧾 *Новый чек на подтверждение*\n\n"[m
+         f"💰 Сумма: {payment['amount']} ₸\n"[m
+[31m-        f"📦 Услуга: {payment['feature']}\n"[m
+[32m+[m[32m        f"📦 Услуга: {feature_names.get(payment['feature'], payment['feature'])}\n"[m
+         f"👤 Пользователь: {payment['user_id']}\n"[m
+[31m-        f"🆔 Платёж #{payment_id}"[m
+[32m+[m[32m        f"🆔 ID заявки #{payment_id}"[m
+     )[m
+[31m-    [m
+[32m+[m
+     await bot.send_photo([m
+[31m-        settings.admin_chat_id,[m
+[31m-        message.photo[-1].file_id,[m
+[31m-        caption=caption,[m
+[31m-        reply_markup=admin_manual_payment_keyboard(payment_id)[m
+[31m-    )[m
+[32m+[m[32m    settings.admin_chat_id,[m
+[32m+[m[32m    message.photo[-1].file_id,[m
+[32m+[m[32m    caption=caption,[m
+[32m+[m[32m    parse_mode="Markdown",[m
+[32m+[m[32m    reply_markup=admin_manual_payment_keyboard(payment_id)[m
+[32m+[m[32m)[m
+     [m
+     await message.answer("✅ Чек отправлен администратору на проверку. Ожидайте подтверждения.")[m
+     await state.update_data(pending_payment_id=None)[m
+[36m@@ -849,7 +864,7 @@[m [masync def manual_payment_confirm(callback: CallbackQuery, repo: SupabaseReposito[m
+ [m
+     # Проверяем, были ли сохранены данные формы[m
+     saved_form_data = payment.get("form_data")[m
+[31m-    if payment["feature"] == "unlimited_vacancies" and saved_form_data:[m
+[32m+[m[32m    if payment["feature"] == "unlimited_vacancies":[m
+         # Если данные есть, просим пользователя продолжить и отправляем их ему.[m
+         await bot.send_message([m
+             payment["user_id"],[m
+[36m@@ -865,7 +880,7 @@[m [masync def manual_payment_confirm(callback: CallbackQuery, repo: SupabaseReposito[m
+         # Стандартное сообщение для других услуг или если данных нет[m
+         await bot.send_message(payment["user_id"], f"✅ {result}")[m
+ [m
+[31m-    await callback.message.edit_text(f"✅ Ручная оплата #{payment_id} подтверждена.")[m
+[32m+[m[32m    await callback.message.answer(f"✅ Ручная оплата #{payment_id} подтверждена.\n{result}")[m
+     await callback.answer()[m
+ [m
+ [m
+[36m@@ -908,7 +923,7 @@[m [masync def our_channel(message: Message, settings: Settings):[m
+         )[m
+     )[m
+ [m
+[31m-@router.message(F.text == "📝 Ищу работу")[m
+[32m+[m[32m@router.message(F.text == "📝 Заполнить анкету")[m
+ async def find_job_button(message: Message, state: FSMContext):[m
+     await seeker_start(message, state)[m
+ [m
+[36m@@ -929,43 +944,137 @@[m [masync def lk_command(message: Message, repo: SupabaseRepository):[m
+ [m
+ [m
+ @router.message(F.text.in_({"👤 Личный кабинет", "/my_stats"}))[m
+[31m-async def my_stats(message: Message, repo: SupabaseRepository) -> None:[m
+[32m+[m[32masync def my_stats([m
+[32m+[m[32m    message: Message,[m
+[32m+[m[32m    repo: SupabaseRepository[m
+[32m+[m[32m) -> None:[m
+[32m+[m
+     try:[m
+[31m-        await message.answer("📊 Загружаем статистику...")[m
+[31m-        [m
+[31m-        user_role = await get_user_role(message.from_user.id, repo)[m
+[31m-        role_display = "Работодатель" if user_role == "employer" else "Соискатель" if user_role == "seeker" else "Не определена"[m
+[31m-        await message.answer(f"👤 Режим: {role_display}")[m
+[31m-        [m
+[32m+[m
+[32m+[m[32m        user_role = await get_user_role([m
+[32m+[m[32m            message.from_user.id,[m
+[32m+[m[32m            repo[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        role_display = ([m
+[32m+[m[32m            "Работодатель"[m
+[32m+[m[32m            if user_role == "employer"[m
+[32m+[m[32m            else "Соискатель"[m
+[32m+[m[32m            if user_role == "seeker"[m
+[32m+[m[32m            else "Не определена"[m
+[32m+[m[32m        )[m
+[32m+[m
+         if user_role == "employer":[m
+[31m-            stats = await repo.employer_stats(message.from_user.id)[m
+[31m-            text = ([m
+[31m-                f"📊 *Статистика работодателя*\n\n"[m
+[31m-                f"📌 Всего вакансий: {stats.get('vacancies_total', 0)}\n"[m
+[31m-                f"✅ Активные: {stats.get('active_vacancies', 0)}\n"[m
+[31m-                f"⏳ На модерации: {stats.get('pending_vacancies', 0)}\n"[m
+[31m-                f"🔒 Закрытые: {stats.get('closed_vacancies', 0)}\n"[m
+[31m-                f"❌ Отклонённые: {stats.get('rejected_vacancies', 0)}\n\n"[m
+[31m-                f"👁️ Просмотров: {stats.get('views', 0)}\n"[m
+[31m-                f"📩 Откликов: {stats.get('responses', 0)}\n"[m
+[31m-                f"👥 Соискателей в вашей сфере: {stats.get('seekers_in_sphere', 0)}"[m
+[31m-            )[m
+[31m-            await message.answer(text, parse_mode="Markdown")[m
+[31m-        else:[m
+[31m-            seeker = await repo.get_seeker(message.from_user.id)[m
+[31m-            if not seeker:[m
+[32m+[m
+[32m+[m[32m            try:[m
+[32m+[m
+[32m+[m[32m                stats = await repo.employer_stats([m
+[32m+[m[32m                    message.from_user.id[m
+[32m+[m[32m                )[m
+[32m+[m
+[32m+[m[32m            except Exception as e:[m
+[32m+[m
+[32m+[m[32m                logger.error([m
+[32m+[m[32m                    f"Employer stats error: {e}"[m
+[32m+[m[32m                )[m
+[32m+[m
+                 await message.answer([m
+[31m-                    "📝 У вас нет анкеты соискателя.\n\n"[m
+[31m-                    "Хотите найти работу? Заполните анкету!\n\n"[m
+[31m-                    "👉 Нажмите /resume, чтобы начать"[m
+[32m+[m[32m                    "⚠️ Статистика временно недоступна.\n\n"[m
+[32m+[m[32m                    "Но ваши вакансии продолжают работать 🙂"[m
+                 )[m
+[32m+[m
+                 return[m
+[31m-            stats = await repo.seeker_stats(message.from_user.id)[m
+[31m-            text = f"📊 Статистика соискателя:\n\nПросмотров: {stats.get('views', 0)}\nОткликов: {stats.get('responses', 0)}"[m
+[32m+[m
+[32m+[m[32m            text = ([m
+[32m+[m[32m                f"📊 Статистика работодателя\n\n"[m
+[32m+[m
+[32m+[m[32m                f"👤 Режим: {role_display}\n\n"[m
+[32m+[m
+[32m+[m[32m                f"📌 Всего вакансий: "[m
+[32m+[m[32m                f"{stats.get('vacancies_total', 0)}\n"[m
+[32m+[m
+[32m+[m[32m                f"✅ Активные: "[m
+[32m+[m[32m                f"{stats.get('active_vacancies', 0)}\n"[m
+[32m+[m
+[32m+[m[32m                f"⏳ На модерации: "[m
+[32m+[m[32m                f"{stats.get('pending_vacancies', 0)}\n"[m
+[32m+[m
+[32m+[m[32m                f"🔒 Закрытые: "[m
+[32m+[m[32m                f"{stats.get('closed_vacancies', 0)}\n"[m
+[32m+[m
+[32m+[m[32m                f"❌ Отклонённые: "[m
+[32m+[m[32m                f"{stats.get('rejected_vacancies', 0)}\n\n"[m
+[32m+[m
+[32m+[m[32m                f"👁️ Просмотров: "[m
+[32m+[m[32m                f"{stats.get('views', 0)}\n"[m
+[32m+[m
+[32m+[m[32m                f"📩 Откликов: "[m
+[32m+[m[32m                f"{stats.get('responses', 0)}"[m
+[32m+[m[32m            )[m
+[32m+[m
+             await message.answer(text)[m
+[31m-            [m
+[32m+[m
+[32m+[m[32m            return[m
+[32m+[m
+[32m+[m[32m        seeker = await repo.get_seeker([m
+[32m+[m[32m            message.from_user.id[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        if not seeker:[m
+[32m+[m
+[32m+[m[32m            await message.answer([m
+[32m+[m[32m                "📝 У вас пока нет анкеты "[m
+[32m+[m[32m                "соискателя.\n\n"[m
+[32m+[m
+[32m+[m[32m                "Нажмите кнопку "[m
+[32m+[m[32m                "«📝 Заполнить анкету» "[m
+[32m+[m[32m                "в меню ниже 👇"[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            return[m
+[32m+[m
+[32m+[m[32m        try:[m
+[32m+[m
+[32m+[m[32m            stats = await repo.seeker_stats([m
+[32m+[m[32m                message.from_user.id[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m        except Exception as e:[m
+[32m+[m
+[32m+[m[32m            logger.error([m
+[32m+[m[32m                f"Seeker stats error: {e}"[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            await message.answer([m
+[32m+[m[32m                "⚠️ Статистика временно недоступна."[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            return[m
+[32m+[m
+[32m+[m[32m        text = ([m
+[32m+[m[32m            f"📊 Статистика соискателя\n\n"[m
+[32m+[m
+[32m+[m[32m            f"👤 Режим: {role_display}\n\n"[m
+[32m+[m
+[32m+[m[32m            f"👁️ Просмотров: "[m
+[32m+[m[32m            f"{stats.get('views', 0)}\n"[m
+[32m+[m
+[32m+[m[32m            f"📩 Откликов: "[m
+[32m+[m[32m            f"{stats.get('responses', 0)}"[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        await message.answer(text)[m
+[32m+[m
+     except Exception as e:[m
+[31m-        await message.answer(f"❌ Ошибка: {str(e)[:100]}")[m
+[32m+[m
+[32m+[m[32m        logger.error([m
+[32m+[m[32m            f"My stats error: {e}"[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        await message.answer([m
+[32m+[m[32m            "❌ Ошибка загрузки кабинета."[m
+[32m+[m[32m        )[m
+[32m+[m[41m        [m
+ [m
+ @router.message(Command("admin_stats"))[m
+ async def admin_stats(message: Message, repo: SupabaseRepository, settings: Settings) -> None:[m
+[1mdiff --git a/bots/keyboards/common/main_menu.py b/bots/keyboards/common/main_menu.py[m
+[1mindex f3e22e2..946f5fe 100644[m
+[1m--- a/bots/keyboards/common/main_menu.py[m
+[1m+++ b/bots/keyboards/common/main_menu.py[m
+[36m@@ -3,7 +3,7 @@[m [mfrom aiogram.types import KeyboardButton, ReplyKeyboardMarkup[m
+ [m
+ def main_menu(user_role: str = None) -> ReplyKeyboardMarkup:[m
+     keyboard = [[m
+[31m-        [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Ищу работу")],[m
+[32m+[m[32m        [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Заполнить анкету")],[m
+         [KeyboardButton(text="👥 Пригласить друга"), KeyboardButton(text="🔍 Смотреть вакансии")],[m
+         [KeyboardButton(text="👤 Личный кабинет"), KeyboardButton(text="📺 Наш канал")],[m
+     ][m
+[1mdiff --git a/bots/keyboards/job_inline.py b/bots/keyboards/job_inline.py[m
+[1mindex c33694d..3f42a4b 100644[m
+[1m--- a/bots/keyboards/job_inline.py[m
+[1m+++ b/bots/keyboards/job_inline.py[m
+[36m@@ -1,7 +1,13 @@[m
+[31m-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup[m
+[32m+[m[32mfrom aiogram.types import ([m
+[32m+[m[32m    InlineKeyboardButton,[m
+[32m+[m[32m    InlineKeyboardMarkup,[m
+[32m+[m[32m    KeyboardButton,[m
+[32m+[m[32m    ReplyKeyboardMarkup,[m
+[32m+[m[32m)[m
+[32m+[m
+ from aiogram.utils.keyboard import InlineKeyboardBuilder[m
+ [m
+[31m-from constants import ([m
+[32m+[m[32mfrom job_lisakovsk_bot.constants import ([m
+     FEATURE_PIN_VACANCY,[m
+     FEATURE_UNLIMITED_VACANCIES,[m
+     FEATURE_URGENT_BROADCAST,[m
+[36m@@ -23,10 +29,10 @@[m [mdef main_menu(user_role: str = None) -> ReplyKeyboardMarkup:[m
+     if user_role == "employer":[m
+         role_button = [KeyboardButton(text="📢 Разместить вакансию")][m
+     elif user_role == "seeker":[m
+[31m-        role_button = [KeyboardButton(text="📝 Ищу работу")][m
+[32m+[m[32m        role_button = [KeyboardButton(text="📝 Заполнить анкету" )][m
+     else:[m
+         # Если роль не определена, показываем обе[m
+[31m-        role_button = [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Ищу работу")][m
+[32m+[m[32m        role_button = [KeyboardButton(text="📢 Разместить вакансию"), KeyboardButton(text="📝 Заполнить анкету")][m
+     [m
+     keyboard = [role_button] + base_buttons[m
+     [m
+[1mdiff --git a/services/job_text.py b/services/job_text.py[m
+[1mindex 0243ec5..d2310f2 100644[m
+[1m--- a/services/job_text.py[m
+[1m+++ b/services/job_text.py[m
+[36m@@ -17,13 +17,23 @@[m [mdef vacancy_public_text(vacancy: dict, bot_username: str) -> str:[m
+     schedule = vacancy["schedule"].lower()[m
+     description = vacancy["description"][m
+     contacts = vacancy["contacts"][m
+[32m+[m
+     return ([m
+[31m-        f"🏗 Требуется {title}\n"[m
+[31m-        f"💰 {salary}\n"[m
+[31m-        f"📍 Лисаковск, {schedule}\n"[m
+[31m-        f"📝 {description}\n"[m
+[31m-        f"Контакты: {contacts}\n\n"[m
+[31m-        f"Разместить свою вакансию: @{bot_username}"[m
+[32m+[m[32m        f"🏢 Работодатель\n\n"[m
+[32m+[m[32m        f"📍 Лисаковск\n\n"[m
+[32m+[m[32m        f"💼 Требуется:\n"[m
+[32m+[m[32m        f"{title}\n\n"[m
+[32m+[m[32m        f"💰 Зарплата:\n"[m
+[32m+[m[32m        f"{salary}\n\n"[m
+[32m+[m[32m        f"🕒 График:\n"[m
+[32m+[m[32m        f"{schedule.capitalize()}\n\n"[m
+[32m+[m[32m        f"📋 Обязанности:\n"[m
+[32m+[m[32m        f"{description}\n\n"[m
+[32m+[m[32m        f"📞 Контакты:\n"[m
+[32m+[m[32m        f"{contacts}\n\n"[m
+[32m+[m[32m        f"#Май2026@LisakovskHub #Работа@LisakovskHub\n\n"[m
+[32m+[m[32m        f"Разместить свою вакансию:\n"[m
+[32m+[m[32m        f"@{bot_username}"[m
+     )[m
+ [m
+ [m
